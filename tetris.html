@@ -565,7 +565,7 @@ kbd {
   const LOCK_MS = 500, MAX_RESETS = 15;     // how long a landed piece can still be nudged
   const DAS_MS = 170, ARR_MS = 45;          // hold-to-repeat for left and right
   const SOFT_MS = 40, CLEAR_MS = 320;
-  const BEST_KEY = 'pocket-tetris-best', SOUND_KEY = 'pocket-tetris-sound', MUSIC_KEY = 'pocket-tetris-music';
+  const BEST_KEY = 'pocket-tetris-best', SOUND_KEY = 'pocket-tetris-sfx', MUSIC_KEY = 'pocket-tetris-music';
 
   const $ = id => document.getElementById(id);
   const el = {
@@ -709,6 +709,7 @@ kbd {
     let n = 0;
     while (!collides(piece.type, piece.rot, piece.x, piece.y + 1)) { piece.y++; n++; }
     addScore(n * 2);
+    sfx('drop');
     lockPiece();
   }
 
@@ -752,7 +753,7 @@ kbd {
       if (collides(piece.type, piece.rot, piece.x, piece.y + 1)) { dropAcc = 0; break; }
       dropAcc -= interval;
       piece.y++;
-      if (softDrop) addScore(1);
+      if (softDrop) { addScore(1); sfx('soft'); }
       afterAction(true);
     }
     if (collides(piece.type, piece.rot, piece.x, piece.y + 1)) {
@@ -801,18 +802,24 @@ kbd {
     tetris: [[523, .07], [659, .07], [784, .07], [1047, .18]],
     level: [[784, .08], [988, .14]],
     over: [[392, .14], [330, .14], [262, .14], [196, .3]],
+    // [start pitch, length, end pitch (a slide), loudness]
+    soft: [[1320, .022, 0, .03]],                 // one tick for every row of a fast fall
+    drop: [[1400, .11, 120, .05], [70, .08, 40, .09]],   // a falling whistle, then a thud
   };
-  let soundOn = false, audio = null;
+  let soundOn = true, audio = null;
+  const sfxCount = {};
   function sfx(name) {
     if (!soundOn) return;
+    sfxCount[name] = (sfxCount[name] || 0) + 1;
     try {
       getAudio();
       let t = audio.currentTime;
-      for (const [freq, dur] of SFX[name]) {
+      for (const [freq, dur, to, vol] of SFX[name]) {
         const osc = audio.createOscillator(), gain = audio.createGain();
         osc.type = 'square';
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.05, t);
+        osc.frequency.setValueAtTime(freq, t);
+        if (to) osc.frequency.exponentialRampToValueAtTime(to, t + dur);
+        gain.gain.setValueAtTime(vol || 0.05, t);
         gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
         osc.connect(gain); gain.connect(audio.destination);
         osc.start(t); osc.stop(t + dur + 0.02);
@@ -1128,7 +1135,7 @@ kbd {
     }
     if (a === 'down') {
       softDrop = true;
-      if (canAct() && tryMove(0, 1)) { addScore(1); dropAcc = 0; }
+      if (canAct() && tryMove(0, 1)) { addScore(1); dropAcc = 0; sfx('soft'); }
       return;
     }
     if (!canAct()) return;
@@ -1212,7 +1219,7 @@ kbd {
         g.ay = e.clientY; g.moved = true;
       } else if (dy >= s && dy > Math.abs(dx)) {
         while (dy >= s) {
-          if (canAct() && tryMove(0, 1)) { addScore(1); dropAcc = 0; }
+          if (canAct() && tryMove(0, 1)) { addScore(1); dropAcc = 0; sfx('soft'); }
           g.ay += s; dy -= s;
         }
         g.ax = e.clientX; g.moved = true;
@@ -1292,8 +1299,8 @@ kbd {
     buildSeg(el.dBest, 6, 'Рекорд'); buildSeg(el.dScore, 6, 'Счёт');
     buildSeg(el.dLevel, 2, 'Уровень'); buildSeg(el.dLines, 3, 'Линии');
     try { best = Math.max(0, parseInt(localStorage.getItem(BEST_KEY), 10) || 0); } catch (e) { best = 0; }
-    let wantSound = false;
-    try { wantSound = localStorage.getItem(SOUND_KEY) === '1'; } catch (e) { /* ignore */ }
+    let wantSound = true;
+    try { wantSound = localStorage.getItem(SOUND_KEY) !== '0'; } catch (e) { /* ignore */ }
     setSound(wantSound, false);
     let wantMusic = true;
     try { wantMusic = localStorage.getItem(MUSIC_KEY) !== '0'; } catch (e) { /* ignore */ }
@@ -1331,7 +1338,7 @@ kbd {
 
   if (typeof window.__tetrisTest === 'function') {
     window.__tetrisTest({
-      get state() { return { mode, score, lines, level, piece, board, queue, holdType, canHold, nextCount, cellCss, music: { on: music.on, playing: !!music.gain, notes: music.notes, step: music.step, songSteps: SONG_STEPS } }; },
+      get state() { return { mode, score, lines, level, piece, board, queue, holdType, canHold, nextCount, cellCss, music: { on: music.on, playing: !!music.gain, notes: music.notes, step: music.step, songSteps: SONG_STEPS }, sound: soundOn, sfx: { ...sfxCount } }; },
       set(fn) {
         fn({
           board(b) { board = b; },

@@ -153,6 +153,7 @@ button { font: inherit; color: inherit; }
 .fn-btn:disabled { opacity: .45; cursor: default; }
 #btn-sound[aria-pressed="true"] .snd-off,
 #btn-sound[aria-pressed="false"] .snd-on { display: none; }
+#btn-music[aria-pressed="true"] .mus-off { display: none; }
 #btn-pause[data-paused="true"] .ic-pause,
 #btn-pause:not([data-paused="true"]) .ic-play { display: none; }
 
@@ -396,7 +397,7 @@ kbd {
     grid-template-areas: "top screen padr" "padl screen padr";
     gap: 8px 14px;
   }
-  .top { flex-wrap: wrap; }
+  .top { flex-direction: column; align-items: flex-start; }
   .brand { font-size: 1.2rem; }
   .pad { display: contents; --k: clamp(46px, 8.5vw, 60px); --big: clamp(72px, 13vw, 96px); --pill: clamp(60px, 10vw, 80px); }
   .pad-l { grid-area: padl; align-self: center; justify-self: center; }
@@ -416,6 +417,14 @@ kbd {
       Тетрис
     </h1>
     <div class="fn">
+      <button class="fn-btn" id="btn-music" type="button" aria-pressed="true" aria-label="Выключить музыку">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 17.5V6.2l10-2.2v11.3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="6.5" cy="17.5" r="2.6"/>
+          <circle cx="16.5" cy="15.3" r="2.6"/>
+          <path class="mus-off" d="M3.5 3.5l17 17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>
+      </button>
       <button class="fn-btn" id="btn-sound" type="button" aria-pressed="false" aria-label="Включить звук">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M3.5 9.5h3.3L11.5 5.5v13l-4.7-4H3.5z"/>
@@ -498,6 +507,7 @@ kbd {
     <li><kbd>Пробел</kbd> уронить</li>
     <li><kbd>C</kbd> запас</li>
     <li><kbd>P</kbd> пауза</li>
+    <li><kbd>M</kbd> музыка</li>
   </ul>
 </main>
 
@@ -555,7 +565,7 @@ kbd {
   const LOCK_MS = 500, MAX_RESETS = 15;     // how long a landed piece can still be nudged
   const DAS_MS = 170, ARR_MS = 45;          // hold-to-repeat for left and right
   const SOFT_MS = 40, CLEAR_MS = 320;
-  const BEST_KEY = 'pocket-tetris-best', SOUND_KEY = 'pocket-tetris-sound';
+  const BEST_KEY = 'pocket-tetris-best', SOUND_KEY = 'pocket-tetris-sound', MUSIC_KEY = 'pocket-tetris-music';
 
   const $ = id => document.getElementById(id);
   const el = {
@@ -564,7 +574,7 @@ kbd {
     dBest: $('d-best'), dScore: $('d-score'), dLevel: $('d-level'), dLines: $('d-lines'),
     veil: $('veil'), vTitle: $('veil-title'), vText: $('veil-text'), vMain: $('veil-main'),
     vAlt: $('veil-alt'), vHelp: $('veil-help'), toast: $('toast'),
-    btnPause: $('btn-pause'), btnSound: $('btn-sound'), pad: $('pad'),
+    btnPause: $('btn-pause'), btnSound: $('btn-sound'), btnMusic: $('btn-music'), pad: $('pad'),
   };
   const ctx = el.board.getContext('2d');
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -756,7 +766,7 @@ kbd {
     board = emptyBoard(); queue = []; refill(); holdType = null;
     score = 0; lines = 0; level = 1; newBest = false; clearing = null;
     moveDir = 0; heldKeys.left = heldKeys.right = false;
-    mode = 'play'; lastT = 0;
+    mode = 'play'; lastT = 0; music.step = 0;
     el.toast.hidden = true;
     nextPiece();
     hudDirty = true;
@@ -796,8 +806,7 @@ kbd {
   function sfx(name) {
     if (!soundOn) return;
     try {
-      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
-      if (audio.state === 'suspended') audio.resume();
+      getAudio();
       let t = audio.currentTime;
       for (const [freq, dur] of SFX[name]) {
         const osc = audio.createOscillator(), gain = audio.createGain();
@@ -817,6 +826,103 @@ kbd {
     el.btnSound.setAttribute('aria-label', on ? 'Выключить звук' : 'Включить звук');
     try { localStorage.setItem(SOUND_KEY, on ? '1' : '0'); } catch (e) { /* ignore */ }
     if (on && confirmBeep) sfx('rot');
+  }
+  function getAudio() {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === 'suspended') audio.resume();
+    return audio;
+  }
+
+  /* ---------- Music: "Korobeiniki" (a Russian folk song), looped on two 8-bit voices ---------- */
+  // Each token is note:beats; R is a rest. Both sections are 8 bars of 4 beats.
+  const MELODY_A = 'E5:1 B4:.5 C5:.5 D5:1 C5:.5 B4:.5 A4:1 A4:.5 C5:.5 E5:1 D5:.5 C5:.5 ' +
+    'B4:1.5 C5:.5 D5:1 E5:1 C5:1 A4:1 A4:2 ' +
+    'R:.5 D5:1 F5:.5 A5:1 G5:.5 F5:.5 E5:1.5 C5:.5 E5:1 D5:.5 C5:.5 ' +
+    'B4:1 B4:.5 C5:.5 D5:1 E5:1 C5:1 A4:1 A4:1 R:1';
+  const MELODY_B = 'E5:2 C5:2 D5:2 B4:2 C5:2 A4:2 G#4:2 B4:2 E5:2 C5:2 D5:2 B4:2 C5:1 E5:1 A5:2 G#5:4';
+  const BASS_A = 'E2 A2 E2 A2 D2 C2 E2 A2', BASS_B = 'A2 E2 A2 E2 A2 E2 A2 E2';
+  const STEP = 0.5;                                  // the grid is one eighth note
+  const SONG = [];
+  let SONG_STEPS = 0;
+  (function buildSong() {
+    const freq = name => {
+      const m = /^([A-G])(#?)(\d)$/.exec(name);
+      const midi = (+m[3] + 1) * 12 + { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[m[1]] + (m[2] ? 1 : 0);
+      return 440 * Math.pow(2, (midi - 69) / 12);
+    };
+    const put = (beat, f, dur, voice) => {
+      const i = Math.round(beat / STEP);
+      (SONG[i] = SONG[i] || []).push({ f, dur, voice });
+    };
+    let start = 0;
+    for (const [melody, bass] of [[MELODY_A, BASS_A], [MELODY_A, BASS_A], [MELODY_B, BASS_B]]) {
+      let beat = start;
+      for (const tok of melody.split(' ')) {
+        const [n, d] = tok.split(':');
+        if (n !== 'R') put(beat, freq(n), +d, 'lead');
+        beat += +d;
+      }
+      bass.split(' ').forEach((root, bar) => {
+        const f = freq(root);
+        for (let k = 0; k < 8; k++) put(start + bar * 4 + k * STEP, k % 2 ? f * 2 : f, STEP, 'bass');
+      });
+      start += 32;
+    }
+    SONG_STEPS = start / STEP;
+  })();
+
+  const music = { on: true, gain: null, timer: 0, step: 0, next: 0, notes: 0 };
+  const musicBpm = () => Math.min(200, 144 + (level - 1) * 6);   // speeds up a little each level
+
+  function playNote(n, t, dur) {
+    const o = audio.createOscillator(), v = audio.createGain();
+    o.type = n.voice === 'lead' ? 'square' : 'triangle';
+    o.frequency.value = n.f;
+    const peak = n.voice === 'lead' ? 0.045 : 0.09, len = Math.max(0.05, dur * 0.9);
+    v.gain.setValueAtTime(peak, t);
+    v.gain.linearRampToValueAtTime(peak * 0.7, t + len * 0.8);
+    v.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    o.connect(v); v.connect(music.gain);
+    o.start(t); o.stop(t + len + 0.02);
+    music.notes++;
+  }
+  // Notes are booked a fraction of a second ahead, so the beat stays even if the page is busy.
+  function scheduleMusic() {
+    if (!music.gain) return;
+    const spb = 60 / musicBpm();
+    if (music.next < audio.currentTime) music.next = audio.currentTime + 0.05;
+    while (music.next < audio.currentTime + 0.2) {
+      const notes = SONG[music.step];
+      if (notes) for (const n of notes) playNote(n, music.next, n.dur * spb);
+      music.next += STEP * spb;
+      music.step = (music.step + 1) % SONG_STEPS;
+    }
+  }
+  // Music plays only while a game is running; a pause stops it, and it carries on from the same bar.
+  function updateMusic() {
+    const want = music.on && mode === 'play';
+    if (want && !music.gain) {
+      try {
+        getAudio();
+        music.gain = audio.createGain();
+        music.gain.connect(audio.destination);
+        music.next = 0;
+        music.timer = setInterval(scheduleMusic, 25);
+        scheduleMusic();
+      } catch (e) { music.gain = null; }
+    } else if (!want && music.gain) {
+      clearInterval(music.timer);
+      const g = music.gain;
+      music.gain = null;
+      try { g.gain.setTargetAtTime(0, audio.currentTime, 0.02); setTimeout(() => g.disconnect(), 250); } catch (e) { /* ignore */ }
+    }
+  }
+  function setMusic(on) {
+    music.on = on;
+    el.btnMusic.setAttribute('aria-pressed', String(on));
+    el.btnMusic.setAttribute('aria-label', on ? 'Выключить музыку' : 'Включить музыку');
+    try { localStorage.setItem(MUSIC_KEY, on ? '1' : '0'); } catch (e) { /* ignore */ }
+    updateMusic();
   }
 
   /* ---------- Drawing ---------- */
@@ -997,6 +1103,7 @@ kbd {
     el.btnPause.disabled = idle || mode === 'over';
     el.btnPause.dataset.paused = String(paused);
     el.btnPause.setAttribute('aria-label', paused ? 'Продолжить' : 'Пауза');
+    updateMusic();
     dirty = true;
   }
   let toastTimer = 0;
@@ -1012,6 +1119,7 @@ kbd {
 
   function press(a) {
     if (a === 'pause') { togglePause(); return; }
+    if (a === 'music') { setMusic(!music.on); return; }
     if (a === 'left' || a === 'right') {
       heldKeys[a] = true;
       moveDir = a === 'left' ? -1 : 1; das = 0; arr = 0;
@@ -1041,7 +1149,7 @@ kbd {
   const KEYMAP = {
     ArrowLeft: 'left', ArrowRight: 'right', ArrowDown: 'down', ArrowUp: 'cw',
     KeyA: 'left', KeyD: 'right', KeyS: 'down', KeyW: 'cw', KeyX: 'cw', KeyZ: 'ccw',
-    Space: 'drop', KeyC: 'hold', ShiftLeft: 'hold', ShiftRight: 'hold', KeyP: 'pause', Escape: 'pause',
+    Space: 'drop', KeyC: 'hold', ShiftLeft: 'hold', ShiftRight: 'hold', KeyP: 'pause', Escape: 'pause', KeyM: 'music',
   };
   function bindKeyboard() {
     window.addEventListener('keydown', e => {
@@ -1187,6 +1295,9 @@ kbd {
     let wantSound = false;
     try { wantSound = localStorage.getItem(SOUND_KEY) === '1'; } catch (e) { /* ignore */ }
     setSound(wantSound, false);
+    let wantMusic = true;
+    try { wantMusic = localStorage.getItem(MUSIC_KEY) !== '0'; } catch (e) { /* ignore */ }
+    setMusic(wantMusic);
     demo();
     layout();
     syncUi();
@@ -1196,6 +1307,7 @@ kbd {
     el.vAlt.addEventListener('click', newGame);
     el.btnPause.addEventListener('click', e => { togglePause(); if (e.detail) e.currentTarget.blur(); });
     el.btnSound.addEventListener('click', e => { setSound(!soundOn, true); if (e.detail) e.currentTarget.blur(); });
+    el.btnMusic.addEventListener('click', e => { setMusic(!music.on); if (e.detail) e.currentTarget.blur(); });
 
     let pending = 0;
     const relayout = () => { cancelAnimationFrame(pending); pending = requestAnimationFrame(layout); };
@@ -1219,7 +1331,7 @@ kbd {
 
   if (typeof window.__tetrisTest === 'function') {
     window.__tetrisTest({
-      get state() { return { mode, score, lines, level, piece, board, queue, holdType, canHold, nextCount, cellCss }; },
+      get state() { return { mode, score, lines, level, piece, board, queue, holdType, canHold, nextCount, cellCss, music: { on: music.on, playing: !!music.gain, notes: music.notes, step: music.step, songSteps: SONG_STEPS } }; },
       set(fn) {
         fn({
           board(b) { board = b; },

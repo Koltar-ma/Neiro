@@ -1,0 +1,41 @@
+// One-off check of the music: it starts with a game, keeps playing, stops on pause and with M.
+const { chromium } = require('playwright');
+const path = require('path');
+const url = 'file://' + path.join(__dirname, 'tetris.html');
+
+(async () => {
+  const browser = await chromium.launch();
+  const context = await browser.newContext({ viewport: { width: 390, height: 760 }, isMobile: true, hasTouch: true });
+  await context.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(m.text()); });
+  await page.addInitScript(() => { window.__tetrisTest = api => { window.T = api; }; });
+  await page.goto(url);
+  await page.waitForTimeout(300);
+  const m = () => page.evaluate(() => T.state.music);
+  const r = {};
+  r.idle = await m();
+  await page.tap('#veil-main');
+  await page.waitForTimeout(1500);
+  r.after1500 = await m();
+  await page.waitForTimeout(1500);
+  r.after3000 = await m();
+  await page.tap('#btn-pause');
+  await page.waitForTimeout(400);
+  r.paused = await m();
+  await page.tap('#veil-main');
+  await page.waitForTimeout(500);
+  r.resumed = await m();
+  await page.keyboard.press('KeyM');
+  r.afterM = await m();
+  await page.keyboard.press('KeyM');
+  r.afterM2 = await m();
+  r.btn = await page.evaluate(() => ({ pressed: document.getElementById('btn-music').getAttribute('aria-pressed'), label: document.getElementById('btn-music').getAttribute('aria-label') }));
+  r.fits = await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight);
+  await page.screenshot({ path: path.join(__dirname, 'shot-music.png') });
+  r.errors = errors;
+  console.log(JSON.stringify(r, null, 1));
+  await browser.close();
+})().catch(e => { console.error('CRASH', e); process.exit(1); });

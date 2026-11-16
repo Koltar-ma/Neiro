@@ -1,0 +1,1363 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}</style>
+<title>Карманный тетрис</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:ital,wght@0,500;0,700;1,800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Condensed:wght@700;800&display=swap">
+<style>
+/* Layout: a one-screen handheld. The page is the plastic shell; a dark bezel hugs an olive
+   LCD (the well on the left, readouts on the right); yellow keys sit underneath. */
+:root {
+  --desk: #aab3ad;
+  --shell: #d5dad6;
+  --shell-ink: #20262a;
+  --shell-mute: #4c575e;
+  --rim: rgb(255 255 255 / .5);
+  --bezel: #23282c;
+  --bezel-edge: #101315;
+  --lcd: #a3b08b;
+  --lcd-ink: #141a10;
+  --lcd-shade: rgb(20 26 16 / .3);
+  --key: #f2c230;
+  --key-edge: #b0850c;
+  --key-ink: #2a2204;
+  --rubber: #4a5259;
+  --rubber-edge: #2a2f34;
+  --rubber-ink: #f1f4f2;
+  --cast: rgb(24 32 28 / .24);
+  --focus: #0b57d0;
+  --font-display: "Exo 2", "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+  --font-label: "Sofia Sans Condensed", "Roboto Condensed", "Arial Narrow", sans-serif-condensed, system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --desk: #0c0e0f;
+    --shell: #1d2124;
+    --shell-ink: #e8ebe9;
+    --shell-mute: #9ba5a9;
+    --rim: rgb(255 255 255 / .07);
+    --bezel: #090a0c;
+    --bezel-edge: #353b40;
+    --lcd: #97a57f;
+    --lcd-ink: #121810;
+    --lcd-shade: rgb(8 12 6 / .42);
+    --key: #e6b828;
+    --key-edge: #8a6806;
+    --key-ink: #241d03;
+    --rubber: #363d43;
+    --rubber-edge: #0b0d0f;
+    --rubber-ink: #e8ebe9;
+    --cast: rgb(0 0 0 / .5);
+    --focus: #8ab4ff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --desk: #0c0e0f;
+  --shell: #1d2124;
+  --shell-ink: #e8ebe9;
+  --shell-mute: #9ba5a9;
+  --rim: rgb(255 255 255 / .07);
+  --bezel: #090a0c;
+  --bezel-edge: #353b40;
+  --lcd: #97a57f;
+  --lcd-ink: #121810;
+  --lcd-shade: rgb(8 12 6 / .42);
+  --key: #e6b828;
+  --key-edge: #8a6806;
+  --key-ink: #241d03;
+  --rubber: #363d43;
+  --rubber-edge: #0b0d0f;
+  --rubber-ink: #e8ebe9;
+  --cast: rgb(0 0 0 / .5);
+  --focus: #8ab4ff;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; }
+html { touch-action: manipulation; }
+body {
+  margin: 0;
+  padding-block: 10px 14px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: var(--shell);
+  color: var(--shell-ink);
+  font-family: var(--font-display);
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+
+.app {
+  height: 100%;
+  min-height: 430px;
+  max-width: 460px;
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "top" "screen" "pad";
+  gap: 10px;
+}
+
+/* Shell: the brand and two small rubber buttons */
+.top {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.brand {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  font: italic 800 1.6rem/1 var(--font-display);
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+.brand svg { flex: none; width: 1.05em; height: auto; fill: currentColor; }
+.fn { display: flex; gap: 10px; flex: none; }
+.fn-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--rubber);
+  color: var(--rubber-ink);
+  box-shadow: 0 3px 0 var(--rubber-edge);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.fn-btn svg { width: 22px; height: 22px; fill: currentColor; }
+.fn-btn:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 var(--rubber-edge); }
+.fn-btn:disabled { opacity: .45; cursor: default; }
+#btn-sound[aria-pressed="true"] .snd-off,
+#btn-sound[aria-pressed="false"] .snd-on { display: none; }
+#btn-music[aria-pressed="true"] .mus-off { display: none; }
+#btn-pause[data-paused="true"] .ic-pause,
+#btn-pause:not([data-paused="true"]) .ic-play { display: none; }
+
+/* Screen: bezel, LCD, well and readouts */
+.screen {
+  grid-area: screen;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+.bezel {
+  padding: 10px;
+  background: var(--bezel);
+  border: 1px solid var(--bezel-edge);
+  border-radius: 16px;
+  box-shadow: 0 6px 16px var(--cast);
+}
+.lcd {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  padding: 8px;
+  background: var(--lcd);
+  color: var(--lcd-ink);
+  border-radius: 6px;
+  box-shadow: inset 0 2px 7px var(--lcd-shade);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.lcd :focus-visible { outline-color: var(--lcd-ink); }
+.field {
+  position: relative;
+  flex: none;
+  padding: 2px;
+  border: 2px solid var(--lcd-ink);
+  line-height: 0;
+  touch-action: none;
+}
+.field canvas, .info canvas { display: block; }
+.info {
+  flex: none;
+  width: 84px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.read { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.read.grow { flex: 1 1 0; min-height: 0; }
+.lab {
+  font: 800 .66rem/1 var(--font-label);
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.seg { display: block; max-width: 100%; }
+.seg polygon { fill: var(--lcd-ink); opacity: .09; }
+.seg polygon.on { opacity: 1; }
+.toast {
+  position: absolute;
+  left: 50%;
+  top: 16%;
+  z-index: 1;
+  transform: translateX(-50%);
+  padding: 6px 10px;
+  background: var(--lcd-ink);
+  color: var(--lcd);
+  font: 800 .8rem/1 var(--font-label);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Messages drawn over the LCD: start, pause, game over */
+.veil {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  overflow: auto;
+  border-radius: inherit;
+}
+.veil-card {
+  width: min(100%, 256px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 14px;
+  background: var(--lcd);
+  border: 2px solid var(--lcd-ink);
+  box-shadow: 4px 4px 0 var(--lcd-ink);
+  text-align: center;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.veil h2 {
+  margin: 0;
+  font: italic 800 1.45rem/1.05 var(--font-display);
+  letter-spacing: .01em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+.veil p { margin: 0; font: 500 .9rem/1.4 var(--font-display); text-wrap: pretty; }
+.veil .help { font-size: .8rem; }
+.act { display: flex; flex-direction: column; gap: 8px; }
+.lcd-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 2px solid var(--lcd-ink);
+  border-radius: 3px;
+  background: var(--lcd-ink);
+  color: var(--lcd);
+  font: 700 1rem/1 var(--font-display);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.lcd-btn.ghost { background: transparent; color: var(--lcd-ink); }
+.help-keys { display: none; }
+
+/* Keys under the screen (touch) */
+.pad {
+  --k: clamp(48px, 15.5vw, 62px);
+  --big: clamp(80px, 25vw, 100px);
+  --pill: clamp(64px, 20vw, 82px);
+  grid-area: pad;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.pad-l { display: grid; grid-template-columns: repeat(2, var(--k)); gap: 8px; justify-items: center; }
+.pad-l .key-down { grid-column: 1 / -1; }
+.pad-r { display: flex; align-items: center; gap: 10px; }
+.pills { display: grid; gap: 8px; }
+.key, .pill {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0;
+  border: 0;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.key {
+  width: var(--k);
+  height: var(--k);
+  border-radius: 50%;
+  background: var(--key);
+  color: var(--key-ink);
+  box-shadow: 0 4px 0 var(--key-edge), 0 7px 10px var(--cast);
+}
+.key svg { width: 46%; height: 46%; fill: currentColor; }
+.key-big { width: var(--big); height: var(--big); }
+.key:active, .key.is-down { transform: translateY(3px); box-shadow: 0 1px 0 var(--key-edge); }
+.pill {
+  width: var(--pill);
+  height: var(--k);
+  align-content: center;
+  gap: 3px;
+  border-radius: 14px;
+  background: var(--rubber);
+  color: var(--rubber-ink);
+  font: 700 .78rem/1 var(--font-display);
+  box-shadow: 0 4px 0 var(--rubber-edge), 0 7px 10px var(--cast);
+}
+.pill svg { width: 18px; height: 18px; }
+.pill:active, .pill.is-down { transform: translateY(3px); box-shadow: 0 1px 0 var(--rubber-edge); }
+
+/* Keyboard legend (mouse and keyboard) */
+.keys {
+  grid-area: pad;
+  display: none;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--shell-mute);
+  font: 500 .85rem/1.3 var(--font-display);
+}
+.keys li { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.8em;
+  padding: 2px 6px;
+  border: 1px solid currentColor;
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  color: var(--shell-ink);
+  font: 700 .8rem/1.2 var(--font-label);
+  letter-spacing: .04em;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pad { display: none; }
+  .keys { display: flex; }
+  .help-touch { display: none; }
+  .help-keys { display: block; }
+}
+
+/* Wide screens: the shell becomes an object on a desk */
+@media (min-width: 720px) and (min-height: 600px) {
+  body { display: grid; place-items: center; padding-block: 20px; background: var(--desk); }
+  .app {
+    width: 100%;
+    max-width: 470px;
+    height: min(100%, 800px);
+    padding: 18px 24px 20px;
+    background: var(--shell);
+    border-radius: 30px;
+    box-shadow: inset 0 1px 0 var(--rim), 0 18px 40px var(--cast);
+  }
+  .bezel { padding: 14px; }
+  .lcd { padding: 10px; }
+}
+
+/* Phone on its side: keys move to the left and right of the screen */
+@media (orientation: landscape) and (max-height: 520px) and (pointer: coarse) {
+  body { padding-block: 8px; }
+  .app {
+    max-width: none;
+    min-height: 250px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas: "top screen padr" "padl screen padr";
+    gap: 8px 14px;
+  }
+  .top { flex-direction: column; align-items: flex-start; }
+  .brand { font-size: 1.2rem; }
+  .pad { display: contents; --k: clamp(46px, 8.5vw, 60px); --big: clamp(72px, 13vw, 96px); --pill: clamp(60px, 10vw, 80px); }
+  .pad-l { grid-area: padl; align-self: center; justify-self: center; }
+  .pad-r { grid-area: padr; align-self: center; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .key, .pill, .fn-btn { transition: transform 60ms ease-out, box-shadow 60ms ease-out; }
+}
+</style>
+</head>
+<body>
+<main class="app" id="app">
+  <header class="top">
+    <h1 class="brand">
+      <svg viewBox="0 0 30 19" aria-hidden="true"><path d="M0 0h8v8H0zM11 0h8v8h-8zM22 0h8v8h-8zM11 11h8v8h-8z"/></svg>
+      Тетрис
+    </h1>
+    <div class="fn">
+      <button class="fn-btn" id="btn-music" type="button" aria-pressed="true" aria-label="Выключить музыку">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 17.5V6.2l10-2.2v11.3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="6.5" cy="17.5" r="2.6"/>
+          <circle cx="16.5" cy="15.3" r="2.6"/>
+          <path class="mus-off" d="M3.5 3.5l17 17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <button class="fn-btn" id="btn-sound" type="button" aria-pressed="false" aria-label="Включить звук">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3.5 9.5h3.3L11.5 5.5v13l-4.7-4H3.5z"/>
+          <path class="snd-on" d="M15 9.2a4 4 0 0 1 0 5.6M17.6 6.6a7.6 7.6 0 0 1 0 10.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <path class="snd-off" d="M15.5 9.5l5 5M20.5 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <button class="fn-btn" id="btn-pause" type="button" aria-label="Пауза" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path class="ic-pause" d="M7 5h3.6v14H7zM13.4 5H17v14h-3.6z"/>
+          <path class="ic-play" d="M8 5l11 7-11 7z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <section class="screen" id="screen" aria-label="Экран игры">
+    <div class="bezel" id="bezel">
+      <div class="lcd" id="lcd">
+        <div class="field" id="field">
+          <canvas id="board" width="200" height="400" role="img" aria-label="Стакан 10 на 20 клеток"></canvas>
+          <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+        </div>
+        <div class="info" id="info">
+          <div class="read"><span class="lab">Рекорд</span><svg class="seg" id="d-best" role="img"></svg></div>
+          <div class="read"><span class="lab">Счёт</span><svg class="seg" id="d-score" role="img"></svg></div>
+          <div class="read grow" id="next-slot">
+            <span class="lab" id="next-lab">Далее</span>
+            <canvas id="next" width="56" height="28" role="img" aria-label="Следующие фигуры"></canvas>
+          </div>
+          <div class="read"><span class="lab">Запас</span><canvas id="hold" width="56" height="28" role="img" aria-label="Фигура в запасе"></canvas></div>
+          <div class="read"><span class="lab">Уровень</span><svg class="seg" id="d-level" role="img"></svg></div>
+          <div class="read"><span class="lab">Линии</span><svg class="seg" id="d-lines" role="img"></svg></div>
+        </div>
+        <div class="veil" id="veil">
+          <div class="veil-card">
+            <h2 id="veil-title">Новая игра</h2>
+            <p id="veil-text">Складывайте фигуры в сплошные ряды. Заполненный ряд исчезает.</p>
+            <div class="act">
+              <button class="lcd-btn" id="veil-main" type="button">Играть</button>
+              <button class="lcd-btn ghost" id="veil-alt" type="button" hidden>Начать заново</button>
+            </div>
+            <div id="veil-help">
+              <p class="help help-touch">Жёлтые кнопки двигают и поворачивают фигуру. Можно и пальцем по экрану: касание поворачивает, движение в сторону сдвигает, вниз ускоряет.</p>
+              <p class="help help-keys">Клавиши подписаны под экраном. Enter запускает игру.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="pad" id="pad" aria-label="Кнопки управления">
+    <div class="pad-l">
+      <button class="key" type="button" data-act="left" aria-label="Влево"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 5v14L6 12z"/></svg></button>
+      <button class="key" type="button" data-act="right" aria-label="Вправо"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l10-7z"/></svg></button>
+      <button class="key key-down" type="button" data-act="down" aria-label="Быстрее вниз"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-7 10z"/></svg></button>
+    </div>
+    <div class="pad-r">
+      <div class="pills">
+        <button class="pill" type="button" data-act="drop">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v11M7.5 10.5 12 15l4.5-4.5M5 20h14"/></svg>
+          Уронить
+        </button>
+        <button class="pill" type="button" data-act="hold">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8.5h12l-3-3M18 15.5H6l3 3"/></svg>
+          Запас
+        </button>
+      </div>
+      <button class="key key-big" type="button" data-act="cw" aria-label="Повернуть">
+        <svg viewBox="0 0 24 24" aria-hidden="true" style="fill:none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M19.4 15.2a8 8 0 1 1-1.9-8.1L20.5 10M20.5 4.5V10H15"/></svg>
+      </button>
+    </div>
+  </section>
+
+  <ul class="keys" aria-label="Клавиши управления">
+    <li><kbd>←</kbd><kbd>→</kbd> двигать</li>
+    <li><kbd>↑</kbd> повернуть</li>
+    <li><kbd>↓</kbd> быстрее</li>
+    <li><kbd>Пробел</kbd> уронить</li>
+    <li><kbd>C</kbd> запас</li>
+    <li><kbd>P</kbd> пауза</li>
+    <li><kbd>M</kbd> музыка</li>
+  </ul>
+</main>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ---------- Rules of the game ---------- */
+  const COLS = 10, ROWS = 20, HIDDEN = 2, TOTAL = ROWS + HIDDEN;
+  const TYPES = ['I', 'J', 'L', 'O', 'S', 'T', 'Z'];
+  const SHAPES = {
+    I: [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]],
+    J: [[1, 0, 0], [1, 1, 1], [0, 0, 0]],
+    L: [[0, 0, 1], [1, 1, 1], [0, 0, 0]],
+    O: [[1, 1], [1, 1]],
+    S: [[0, 1, 1], [1, 1, 0], [0, 0, 0]],
+    T: [[0, 1, 0], [1, 1, 1], [0, 0, 0]],
+    Z: [[1, 1, 0], [0, 1, 1], [0, 0, 0]],
+  };
+  // CELLS[type][rotation] = four [x, y] offsets inside the piece's box (0 = spawn, then clockwise).
+  const CELLS = {};
+  for (const t of TYPES) {
+    let m = SHAPES[t];
+    CELLS[t] = [];
+    for (let r = 0; r < 4; r++) {
+      const cells = [];
+      m.forEach((row, y) => row.forEach((v, x) => { if (v) cells.push([x, y]); }));
+      CELLS[t].push(cells);
+      const src = m, n = src.length;
+      m = src.map((_, y) => src.map((__, x) => src[n - 1 - x][y]));
+    }
+  }
+  // Standard wall kicks, keyed by "from" + "to" rotation. y grows downward.
+  const KICKS = {
+    '01': [[0, 0], [-1, 0], [-1, -1], [0, 2], [-1, 2]],
+    '10': [[0, 0], [1, 0], [1, 1], [0, -2], [1, -2]],
+    '12': [[0, 0], [1, 0], [1, 1], [0, -2], [1, -2]],
+    '21': [[0, 0], [-1, 0], [-1, -1], [0, 2], [-1, 2]],
+    '23': [[0, 0], [1, 0], [1, -1], [0, 2], [1, 2]],
+    '32': [[0, 0], [-1, 0], [-1, 1], [0, -2], [-1, -2]],
+    '30': [[0, 0], [-1, 0], [-1, 1], [0, -2], [-1, -2]],
+    '03': [[0, 0], [1, 0], [1, -1], [0, 2], [1, 2]],
+  };
+  const KICKS_I = {
+    '01': [[0, 0], [-2, 0], [1, 0], [-2, 1], [1, -2]],
+    '10': [[0, 0], [2, 0], [-1, 0], [2, -1], [-1, 2]],
+    '12': [[0, 0], [-1, 0], [2, 0], [-1, -2], [2, 1]],
+    '21': [[0, 0], [1, 0], [-2, 0], [1, 2], [-2, -1]],
+    '23': [[0, 0], [2, 0], [-1, 0], [2, -1], [-1, 2]],
+    '32': [[0, 0], [-2, 0], [1, 0], [-2, 1], [1, -2]],
+    '30': [[0, 0], [1, 0], [-2, 0], [1, 2], [-2, -1]],
+    '03': [[0, 0], [-1, 0], [2, 0], [-1, -2], [2, 1]],
+  };
+  const LINE_SCORE = [0, 100, 300, 500, 800];
+  const LOCK_MS = 500, MAX_RESETS = 15;     // how long a landed piece can still be nudged
+  const DAS_MS = 170, ARR_MS = 45;          // hold-to-repeat for left and right
+  const SOFT_MS = 40, CLEAR_MS = 320;
+  const BEST_KEY = 'pocket-tetris-best', SOUND_KEY = 'pocket-tetris-sfx', MUSIC_KEY = 'pocket-tetris-music';
+
+  const $ = id => document.getElementById(id);
+  const el = {
+    screen: $('screen'), bezel: $('bezel'), lcd: $('lcd'), field: $('field'), board: $('board'),
+    info: $('info'), next: $('next'), nextSlot: $('next-slot'), nextLab: $('next-lab'), hold: $('hold'),
+    dBest: $('d-best'), dScore: $('d-score'), dLevel: $('d-level'), dLines: $('d-lines'),
+    veil: $('veil'), vTitle: $('veil-title'), vText: $('veil-text'), vMain: $('veil-main'),
+    vAlt: $('veil-alt'), vHelp: $('veil-help'), toast: $('toast'),
+    btnPause: $('btn-pause'), btnSound: $('btn-sound'), btnMusic: $('btn-music'), pad: $('pad'),
+  };
+  const ctx = el.board.getContext('2d');
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)');
+
+  /* ---------- State ---------- */
+  let board = emptyBoard(), piece = null, queue = [], holdType = null, canHold = true;
+  let score = 0, lines = 0, level = 1, best = 0, newBest = false;
+  let mode = 'idle';                         // idle | play | pause | over
+  let clearing = null;                       // { rows, t } while full rows blink
+  let dropAcc = 0, lockTimer = 0, lockResets = 0, lowestY = 0;
+  let softDrop = false, moveDir = 0, das = 0, arr = 0;
+  const heldKeys = { left: false, right: false };
+  let dirty = true, hudDirty = true, lastT = 0;
+
+  function emptyBoard() { return Array.from({ length: TOTAL }, () => new Array(COLS).fill(0)); }
+
+  // "7-bag": every seven pieces contain each shape once, so droughts stay short.
+  function refill() {
+    while (queue.length < 7) {
+      const bag = TYPES.slice();
+      for (let i = bag.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [bag[i], bag[j]] = [bag[j], bag[i]];
+      }
+      queue.push(...bag);
+    }
+  }
+
+  function collides(type, rot, x, y) {
+    const cells = CELLS[type][rot];
+    for (let i = 0; i < cells.length; i++) {
+      const cx = x + cells[i][0], cy = y + cells[i][1];
+      if (cx < 0 || cx >= COLS || cy >= TOTAL) return true;
+      if (cy >= 0 && board[cy][cx]) return true;
+    }
+    return false;
+  }
+
+  function ghostY() {
+    let y = piece.y;
+    while (!collides(piece.type, piece.rot, piece.x, y + 1)) y++;
+    return y;
+  }
+
+  function spawn(type) {
+    piece = { type, rot: 0, x: type === 'O' ? 4 : 3, y: 0 };
+    dropAcc = 0; lockTimer = 0; lockResets = 0; softDrop = false; dirty = true;
+    if (collides(type, 0, piece.x, piece.y)) { gameOver(); return; }
+    if (!collides(type, 0, piece.x, 1)) piece.y = 1;
+    lowestY = piece.y;
+  }
+
+  function nextPiece() {
+    canHold = true;
+    const t = queue.shift();
+    refill();
+    spawn(t);
+    drawSide();
+  }
+
+  // Moving or turning a landed piece restarts its lock timer, up to MAX_RESETS times per row.
+  function afterAction(fell) {
+    if (piece.y > lowestY) { lowestY = piece.y; lockResets = 0; lockTimer = 0; }
+    else if (!fell && lockResets < MAX_RESETS) { lockResets++; lockTimer = 0; }
+    dirty = true;
+  }
+
+  function tryMove(dx, dy) {
+    if (!piece || collides(piece.type, piece.rot, piece.x + dx, piece.y + dy)) return false;
+    piece.x += dx; piece.y += dy;
+    afterAction(dy > 0);
+    return true;
+  }
+
+  function tryRotate(dir) {
+    if (!piece || piece.type === 'O') return false;
+    const from = piece.rot, to = (from + dir + 4) % 4;
+    const table = piece.type === 'I' ? KICKS_I : KICKS;
+    for (const [kx, ky] of table['' + from + to]) {
+      if (!collides(piece.type, to, piece.x + kx, piece.y + ky)) {
+        piece.x += kx; piece.y += ky; piece.rot = to;
+        afterAction(false);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function addScore(n) {
+    score = Math.min(999999, score + n);
+    if (score > best) { best = score; newBest = true; }
+    hudDirty = true;
+  }
+
+  function lockPiece() {
+    const id = TYPES.indexOf(piece.type) + 1;
+    let aboveWell = true;
+    for (const [x, y] of CELLS[piece.type][piece.rot]) {
+      const cx = piece.x + x, cy = piece.y + y;
+      if (cy >= 0) board[cy][cx] = id;
+      if (cy >= HIDDEN) aboveWell = false;
+    }
+    piece = null; softDrop = false; dirty = true;
+    if (newBest) saveBest();
+    if (aboveWell) { gameOver(); return; }
+    const full = [];
+    for (let r = 0; r < TOTAL; r++) if (board[r].every(Boolean)) full.push(r);
+    if (!full.length) { sfx('lock'); nextPiece(); return; }
+    sfx(full.length === 4 ? 'tetris' : 'clear');
+    clearing = { rows: full, t: 0 };
+    if (reduceMotion.matches) finishClear();
+  }
+
+  function finishClear() {
+    const n = clearing.rows.length;
+    for (const r of clearing.rows) { board.splice(r, 1); board.unshift(new Array(COLS).fill(0)); }
+    clearing = null;
+    addScore(LINE_SCORE[n] * level);
+    lines += n;
+    const reached = Math.floor(lines / 10) + 1;
+    if (reached > level) {
+      level = reached;
+      toast(n === 4 ? 'Тетрис!' : 'Уровень ' + level);
+      sfx('level');
+    } else if (n === 4) toast('Тетрис!');
+    hudDirty = true;
+    nextPiece();
+  }
+
+  function hardDrop() {
+    let n = 0;
+    while (!collides(piece.type, piece.rot, piece.x, piece.y + 1)) { piece.y++; n++; }
+    addScore(n * 2);
+    sfx('drop');
+    lockPiece();
+  }
+
+  function holdPiece() {
+    if (!canHold) return;
+    const t = piece.type;
+    if (holdType) { const h = holdType; holdType = t; spawn(h); }
+    else { holdType = t; const n = queue.shift(); refill(); spawn(n); }
+    canHold = false;
+    sfx('hold');
+    drawSide();
+  }
+
+  // Seconds per row shrink with the level (the standard curve); level 1 is one row per second.
+  function gravityMs() {
+    const l = Math.min(level, 20) - 1;
+    return Math.max(1, Math.pow(0.8 - l * 0.007, l) * 1000);
+  }
+
+  function update(dt) {
+    if (clearing) {
+      clearing.t += dt; dirty = true;
+      if (clearing.t >= CLEAR_MS) finishClear();
+      return;
+    }
+    if (!piece) return;
+    if (moveDir) {
+      das += dt;
+      if (das >= DAS_MS) {
+        arr += dt;
+        while (arr >= ARR_MS) {
+          arr -= ARR_MS;
+          if (!tryMove(moveDir, 0)) { arr = 0; break; }
+        }
+      }
+    }
+    const interval = softDrop ? Math.min(SOFT_MS, gravityMs()) : gravityMs();
+    dropAcc += dt;
+    let steps = 0;
+    while (dropAcc >= interval && steps++ < TOTAL) {
+      if (collides(piece.type, piece.rot, piece.x, piece.y + 1)) { dropAcc = 0; break; }
+      dropAcc -= interval;
+      piece.y++;
+      if (softDrop) { addScore(1); sfx('soft'); }
+      afterAction(true);
+    }
+    if (collides(piece.type, piece.rot, piece.x, piece.y + 1)) {
+      lockTimer += dt;
+      if (lockTimer >= LOCK_MS) lockPiece();
+    }
+  }
+
+  /* ---------- Game flow ---------- */
+  function newGame() {
+    board = emptyBoard(); queue = []; refill(); holdType = null;
+    score = 0; lines = 0; level = 1; newBest = false; clearing = null;
+    moveDir = 0; heldKeys.left = heldKeys.right = false;
+    mode = 'play'; lastT = 0; music.step = 0;
+    el.toast.hidden = true;
+    nextPiece();
+    hudDirty = true;
+    syncUi();
+  }
+  function pause() {
+    if (mode !== 'play') return;
+    mode = 'pause'; softDrop = false; moveDir = 0; heldKeys.left = heldKeys.right = false;
+    syncUi();
+  }
+  function resume() {
+    if (mode !== 'pause') return;
+    mode = 'play'; lastT = 0;
+    syncUi();
+  }
+  function togglePause() { if (mode === 'play') pause(); else if (mode === 'pause') resume(); }
+  function gameOver() {
+    mode = 'over'; clearing = null;
+    saveBest();
+    sfx('over');
+    hudDirty = true;
+    syncUi();
+  }
+  function mainAction() { if (mode === 'pause') resume(); else if (mode !== 'play') newGame(); }
+
+  function saveBest() { try { localStorage.setItem(BEST_KEY, String(best)); } catch (e) { /* storage may be blocked */ } }
+
+  /* ---------- Sound: short square-wave beeps, off until switched on ---------- */
+  const SFX = {
+    move: [[220, .03]], rot: [[330, .04]], hold: [[294, .05]], lock: [[110, .06]],
+    clear: [[523, .07], [659, .07], [784, .1]],
+    tetris: [[523, .07], [659, .07], [784, .07], [1047, .18]],
+    level: [[784, .08], [988, .14]],
+    over: [[392, .14], [330, .14], [262, .14], [196, .3]],
+    // [start pitch, length, end pitch (a slide), loudness]
+    soft: [[1320, .022, 0, .03]],                 // one tick for every row of a fast fall
+    drop: [[1400, .11, 120, .05], [70, .08, 40, .09]],   // a falling whistle, then a thud
+  };
+  let soundOn = true, audio = null;
+  const sfxCount = {};
+  function sfx(name) {
+    if (!soundOn) return;
+    sfxCount[name] = (sfxCount[name] || 0) + 1;
+    try {
+      getAudio();
+      let t = audio.currentTime;
+      for (const [freq, dur, to, vol] of SFX[name]) {
+        const osc = audio.createOscillator(), gain = audio.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(freq, t);
+        if (to) osc.frequency.exponentialRampToValueAtTime(to, t + dur);
+        gain.gain.setValueAtTime(vol || 0.05, t);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        osc.connect(gain); gain.connect(audio.destination);
+        osc.start(t); osc.stop(t + dur + 0.02);
+        t += dur;
+      }
+    } catch (e) { /* no audio here: play silently */ }
+  }
+  function setSound(on, confirmBeep) {
+    soundOn = on;
+    el.btnSound.setAttribute('aria-pressed', String(on));
+    el.btnSound.setAttribute('aria-label', on ? 'Выключить звук' : 'Включить звук');
+    try { localStorage.setItem(SOUND_KEY, on ? '1' : '0'); } catch (e) { /* ignore */ }
+    if (on && confirmBeep) sfx('rot');
+  }
+  function getAudio() {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === 'suspended') audio.resume();
+    return audio;
+  }
+
+  /* ---------- Music: "Korobeiniki" (a Russian folk song), looped on two 8-bit voices ---------- */
+  // Each token is note:beats; R is a rest. Both sections are 8 bars of 4 beats.
+  const MELODY_A = 'E5:1 B4:.5 C5:.5 D5:1 C5:.5 B4:.5 A4:1 A4:.5 C5:.5 E5:1 D5:.5 C5:.5 ' +
+    'B4:1.5 C5:.5 D5:1 E5:1 C5:1 A4:1 A4:2 ' +
+    'R:.5 D5:1 F5:.5 A5:1 G5:.5 F5:.5 E5:1.5 C5:.5 E5:1 D5:.5 C5:.5 ' +
+    'B4:1 B4:.5 C5:.5 D5:1 E5:1 C5:1 A4:1 A4:1 R:1';
+  const MELODY_B = 'E5:2 C5:2 D5:2 B4:2 C5:2 A4:2 G#4:2 B4:2 E5:2 C5:2 D5:2 B4:2 C5:1 E5:1 A5:2 G#5:4';
+  const BASS_A = 'E2 A2 E2 A2 D2 C2 E2 A2', BASS_B = 'A2 E2 A2 E2 A2 E2 A2 E2';
+  const STEP = 0.5;                                  // the grid is one eighth note
+  const SONG = [];
+  let SONG_STEPS = 0;
+  (function buildSong() {
+    const freq = name => {
+      const m = /^([A-G])(#?)(\d)$/.exec(name);
+      const midi = (+m[3] + 1) * 12 + { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[m[1]] + (m[2] ? 1 : 0);
+      return 440 * Math.pow(2, (midi - 69) / 12);
+    };
+    const put = (beat, f, dur, voice) => {
+      const i = Math.round(beat / STEP);
+      (SONG[i] = SONG[i] || []).push({ f, dur, voice });
+    };
+    let start = 0;
+    for (const [melody, bass] of [[MELODY_A, BASS_A], [MELODY_A, BASS_A], [MELODY_B, BASS_B]]) {
+      let beat = start;
+      for (const tok of melody.split(' ')) {
+        const [n, d] = tok.split(':');
+        if (n !== 'R') put(beat, freq(n), +d, 'lead');
+        beat += +d;
+      }
+      bass.split(' ').forEach((root, bar) => {
+        const f = freq(root);
+        for (let k = 0; k < 8; k++) put(start + bar * 4 + k * STEP, k % 2 ? f * 2 : f, STEP, 'bass');
+      });
+      start += 32;
+    }
+    SONG_STEPS = start / STEP;
+  })();
+
+  const music = { on: true, gain: null, timer: 0, step: 0, next: 0, notes: 0 };
+  const musicBpm = () => Math.min(200, 144 + (level - 1) * 6);   // speeds up a little each level
+
+  function playNote(n, t, dur) {
+    const o = audio.createOscillator(), v = audio.createGain();
+    o.type = n.voice === 'lead' ? 'square' : 'triangle';
+    o.frequency.value = n.f;
+    const peak = n.voice === 'lead' ? 0.045 : 0.09, len = Math.max(0.05, dur * 0.9);
+    v.gain.setValueAtTime(peak, t);
+    v.gain.linearRampToValueAtTime(peak * 0.7, t + len * 0.8);
+    v.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    o.connect(v); v.connect(music.gain);
+    o.start(t); o.stop(t + len + 0.02);
+    music.notes++;
+  }
+  // Notes are booked a fraction of a second ahead, so the beat stays even if the page is busy.
+  function scheduleMusic() {
+    if (!music.gain) return;
+    const spb = 60 / musicBpm();
+    if (music.next < audio.currentTime) music.next = audio.currentTime + 0.05;
+    while (music.next < audio.currentTime + 0.2) {
+      const notes = SONG[music.step];
+      if (notes) for (const n of notes) playNote(n, music.next, n.dur * spb);
+      music.next += STEP * spb;
+      music.step = (music.step + 1) % SONG_STEPS;
+    }
+  }
+  // Music plays only while a game is running; a pause stops it, and it carries on from the same bar.
+  function updateMusic() {
+    const want = music.on && mode === 'play';
+    if (want && !music.gain) {
+      try {
+        getAudio();
+        music.gain = audio.createGain();
+        music.gain.connect(audio.destination);
+        music.next = 0;
+        music.timer = setInterval(scheduleMusic, 25);
+        scheduleMusic();
+      } catch (e) { music.gain = null; }
+    } else if (!want && music.gain) {
+      clearInterval(music.timer);
+      const g = music.gain;
+      music.gain = null;
+      try { g.gain.setTargetAtTime(0, audio.currentTime, 0.02); setTimeout(() => g.disconnect(), 250); } catch (e) { /* ignore */ }
+    }
+  }
+  function setMusic(on) {
+    music.on = on;
+    el.btnMusic.setAttribute('aria-pressed', String(on));
+    el.btnMusic.setAttribute('aria-label', on ? 'Выключить музыку' : 'Включить музыку');
+    try { localStorage.setItem(MUSIC_KEY, on ? '1' : '0'); } catch (e) { /* ignore */ }
+    updateMusic();
+  }
+
+  /* ---------- Drawing ---------- */
+  let dpr = 1, dc = 20, cellCss = 20, mc = 14, sprites = null, mini = null, nextCount = 3;
+  const frame = new Uint8Array(COLS * ROWS);
+  const px = v => parseFloat(v) || 0;
+
+  // One LCD cell: a square outline with a filled core. Unlit cells are the same shape, very faint.
+  function sprite(size, color, alpha, core) {
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    const g = c.getContext('2d');
+    const inset = Math.max(1, Math.round(size * 0.07));
+    const ring = Math.max(1, Math.round(size * 0.11));
+    const gap = Math.max(1, Math.round(size * 0.1));
+    const s = size - inset * 2;
+    g.globalAlpha = alpha;
+    g.fillStyle = color;
+    g.fillRect(inset, inset, s, ring);
+    g.fillRect(inset, inset + s - ring, s, ring);
+    g.fillRect(inset, inset + ring, ring, s - ring * 2);
+    g.fillRect(inset + s - ring, inset + ring, ring, s - ring * 2);
+    if (core) {
+      const k = inset + ring + gap, ks = size - k * 2;
+      if (ks > 0) g.fillRect(k, k, ks, ks);
+    }
+    return c;
+  }
+  function makeSprites() {
+    const ink = getComputedStyle(document.documentElement).getPropertyValue('--lcd-ink').trim() || '#141a10';
+    sprites = { on: sprite(dc, ink, 1, true), off: sprite(dc, ink, 0.09, true), ghost: sprite(dc, ink, 0.5, false) };
+    mini = { on: sprite(mc, ink, 1, true), off: sprite(mc, ink, 0.09, true) };
+  }
+
+  function sizeMini(canvas, count) {
+    const sep = Math.round(mc * 0.6);
+    canvas.width = mc * 4;
+    canvas.height = count * mc * 2 + (count - 1) * sep;
+    canvas.style.width = canvas.width / dpr + 'px';
+    canvas.style.height = canvas.height / dpr + 'px';
+  }
+  function sizeSeg(svg, h) {
+    svg.style.height = h + 'px';
+    svg.style.width = (h * (svg.dataset.n * 12 - 2)) / 18 + 'px';
+  }
+
+  // Fit the well and the readouts into the space between the header and the keys.
+  function layout() {
+    const area = el.screen.getBoundingClientRect();
+    if (area.width < 60 || area.height < 60) return;
+    const bz = getComputedStyle(el.bezel), lc = getComputedStyle(el.lcd), fd = getComputedStyle(el.field);
+    const chromeX = px(bz.paddingLeft) + px(bz.paddingRight) + px(bz.borderLeftWidth) + px(bz.borderRightWidth) + px(lc.paddingLeft) + px(lc.paddingRight);
+    const chromeY = px(bz.paddingTop) + px(bz.paddingBottom) + px(bz.borderTopWidth) + px(bz.borderBottomWidth) + px(lc.paddingTop) + px(lc.paddingBottom);
+    const frameW = (px(fd.paddingLeft) + px(fd.borderLeftWidth)) * 2;
+    const gap = px(lc.columnGap) || 10;
+    const INFO_MIN = 78, INFO_MAX = 132;
+    const availW = area.width - chromeX - frameW - gap;
+    const availH = area.height - chromeY - frameW;
+    const cell = Math.max(9, Math.min(32, Math.floor(Math.min(availH / ROWS, (availW - INFO_MIN) / COLS))));
+
+    dpr = Math.min(window.devicePixelRatio || 1, 3);
+    dc = Math.max(6, Math.round(cell * dpr));
+    cellCss = dc / dpr;
+    el.board.width = dc * COLS;
+    el.board.height = dc * ROWS;
+    el.board.style.width = cellCss * COLS + 'px';
+    el.board.style.height = cellCss * ROWS + 'px';
+
+    const infoW = Math.max(INFO_MIN, Math.min(INFO_MAX, Math.floor(availW - cellCss * COLS)));
+    el.info.style.width = infoW + 'px';
+    el.info.style.height = cellCss * ROWS + frameW + 'px';
+    const segH = Math.max(12, Math.min(24, Math.floor((infoW * 18) / 70)));
+    [el.dBest, el.dScore, el.dLevel, el.dLines].forEach(s => sizeSeg(s, segH));
+
+    const miniCss = Math.max(7, Math.min(Math.round(cell * 0.7), Math.floor(infoW / 4)));
+    mc = Math.max(5, Math.round(miniCss * dpr));
+    makeSprites();
+    sizeMini(el.hold, 1);
+    sizeMini(el.next, 1);
+    const room = el.nextSlot.clientHeight - el.nextLab.offsetHeight - 3;
+    const unit = (mc * 2) / dpr, sep = Math.round(mc * 0.6) / dpr;
+    nextCount = Math.max(1, Math.min(3, Math.floor((room + sep) / (unit + sep))));
+    sizeMini(el.next, nextCount);
+    drawSide();
+    dirty = true;
+  }
+
+  function drawBoard() {
+    frame.fill(0);
+    for (let r = 0; r < ROWS; r++) {
+      const row = board[r + HIDDEN];
+      for (let c = 0; c < COLS; c++) if (row[c]) frame[r * COLS + c] = 1;
+    }
+    if (clearing && Math.floor(clearing.t / (CLEAR_MS / 4)) % 2 === 0) {
+      for (const r of clearing.rows) {
+        if (r >= HIDDEN) frame.fill(0, (r - HIDDEN) * COLS, (r - HIDDEN + 1) * COLS);
+      }
+    }
+    if (piece) {
+      const cells = CELLS[piece.type][piece.rot], gy = ghostY();
+      if (gy !== piece.y) for (const [x, y] of cells) { const r = gy + y - HIDDEN; if (r >= 0) frame[r * COLS + piece.x + x] = 2; }
+      for (const [x, y] of cells) { const r = piece.y + y - HIDDEN; if (r >= 0) frame[r * COLS + piece.x + x] = 1; }
+    }
+    ctx.clearRect(0, 0, el.board.width, el.board.height);
+    for (let i = 0; i < frame.length; i++) {
+      const s = frame[i] === 1 ? sprites.on : frame[i] === 2 ? sprites.ghost : sprites.off;
+      ctx.drawImage(s, (i % COLS) * dc, Math.floor(i / COLS) * dc);
+    }
+  }
+
+  // A piece in its spawn pose always fits a 4 x 2 window.
+  function drawMini(canvas, types) {
+    const g = canvas.getContext('2d'), sep = Math.round(mc * 0.6);
+    g.clearRect(0, 0, canvas.width, canvas.height);
+    types.forEach((t, i) => {
+      const lit = new Set();
+      if (t) {
+        const cells = CELLS[t][0], top = Math.min(...cells.map(c => c[1])), shift = t === 'O' ? 1 : 0;
+        for (const [x, y] of cells) lit.add((y - top) * 4 + x + shift);
+      }
+      const y0 = i * (mc * 2 + sep);
+      for (let k = 0; k < 8; k++) g.drawImage(lit.has(k) ? mini.on : mini.off, (k % 4) * mc, y0 + Math.floor(k / 4) * mc);
+    });
+  }
+  function drawSide() {
+    if (!mini) return;
+    drawMini(el.next, Array.from({ length: nextCount }, (_, i) => queue[i] || null));
+    drawMini(el.hold, [holdType]);
+  }
+
+  /* ---------- Seven-segment readouts ---------- */
+  const SEG = {
+    a: '1.4,0.4 8.6,0.4 6.9,2.2 3.1,2.2',
+    b: '9.6,1.1 9.6,8.5 7.8,7.4 7.8,2.9',
+    c: '9.6,9.5 9.6,16.9 7.8,15.1 7.8,10.6',
+    d: '3.1,15.8 6.9,15.8 8.6,17.6 1.4,17.6',
+    e: '0.4,9.5 2.2,10.6 2.2,15.1 0.4,16.9',
+    f: '0.4,1.1 2.2,2.9 2.2,7.4 0.4,8.5',
+    g: '1.9,9 3.1,7.9 6.9,7.9 8.1,9 6.9,10.1 3.1,10.1',
+  };
+  const DIGITS = ['abcdef', 'bc', 'abged', 'abgcd', 'fgbc', 'afgcd', 'afgedc', 'abc', 'abcdefg', 'abcdfg'];
+  function buildSeg(svg, n, label) {
+    svg.dataset.n = n;
+    svg.dataset.label = label;
+    svg.setAttribute('viewBox', '0 0 ' + (n * 12 - 2) + ' 18');
+    let html = '';
+    for (let i = 0; i < n; i++) for (const k in SEG) html += '<polygon data-s="' + k + '" transform="translate(' + i * 12 + ' 0)" points="' + SEG[k] + '"/>';
+    svg.innerHTML = html;
+  }
+  function setSeg(svg, value) {
+    if (svg.dataset.v === String(value)) return;
+    svg.dataset.v = value;
+    const n = +svg.dataset.n, text = String(Math.min(10 ** n - 1, Math.max(0, Math.floor(value)))).padStart(n, ' ');
+    const polys = svg.children;
+    for (let i = 0; i < n; i++) {
+      const lit = text[i] === ' ' ? '' : DIGITS[+text[i]];
+      for (let j = 0; j < 7; j++) polys[i * 7 + j].classList.toggle('on', lit.includes(polys[i * 7 + j].dataset.s));
+    }
+    svg.setAttribute('aria-label', svg.dataset.label + ': ' + value);
+  }
+  function updateHud() {
+    setSeg(el.dBest, best); setSeg(el.dScore, score); setSeg(el.dLevel, level); setSeg(el.dLines, lines);
+  }
+
+  /* ---------- Messages ---------- */
+  const fmt = n => n.toLocaleString('ru-RU');
+  function syncUi() {
+    const idle = mode === 'idle', paused = mode === 'pause';
+    el.veil.hidden = mode === 'play';
+    if (mode !== 'play') el.toast.hidden = true;
+    el.vTitle.textContent = idle ? 'Новая игра' : paused ? 'Пауза' : 'Игра окончена';
+    el.vText.textContent = idle ? 'Складывайте фигуры в сплошные ряды. Заполненный ряд исчезает.'
+      : paused ? '' : 'Счёт ' + fmt(score) + ', линий ' + lines + '.' + (newBest ? ' Новый рекорд!' : '');
+    el.vText.hidden = paused;
+    el.vMain.textContent = idle ? 'Играть' : paused ? 'Продолжить' : 'Играть ещё';
+    el.vAlt.hidden = !paused;
+    el.vHelp.hidden = !idle;
+    el.btnPause.disabled = idle || mode === 'over';
+    el.btnPause.dataset.paused = String(paused);
+    el.btnPause.setAttribute('aria-label', paused ? 'Продолжить' : 'Пауза');
+    updateMusic();
+    dirty = true;
+  }
+  let toastTimer = 0;
+  function toast(text) {
+    el.toast.textContent = text;
+    el.toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.toast.hidden = true; }, 1100);
+  }
+
+  /* ---------- Input: one set of actions for keyboard, keys and gestures ---------- */
+  const canAct = () => mode === 'play' && piece && !clearing;
+
+  function press(a) {
+    if (a === 'pause') { togglePause(); return; }
+    if (a === 'music') { setMusic(!music.on); return; }
+    if (a === 'left' || a === 'right') {
+      heldKeys[a] = true;
+      moveDir = a === 'left' ? -1 : 1; das = 0; arr = 0;
+      if (canAct() && tryMove(moveDir, 0)) sfx('move');
+      return;
+    }
+    if (a === 'down') {
+      softDrop = true;
+      if (canAct() && tryMove(0, 1)) { addScore(1); dropAcc = 0; sfx('soft'); }
+      return;
+    }
+    if (!canAct()) return;
+    if (a === 'cw' || a === 'ccw') { if (tryRotate(a === 'cw' ? 1 : -1)) sfx('rot'); }
+    else if (a === 'drop') hardDrop();
+    else if (a === 'hold') holdPiece();
+  }
+  function release(a) {
+    if (a === 'left' || a === 'right') {
+      heldKeys[a] = false;
+      const other = a === 'left' ? 'right' : 'left';
+      if (heldKeys[other]) { moveDir = other === 'left' ? -1 : 1; das = 0; arr = 0; }
+      else moveDir = 0;
+    } else if (a === 'down') softDrop = false;
+  }
+
+  // Physical key positions, so the Russian layout works the same as the English one.
+  const KEYMAP = {
+    ArrowLeft: 'left', ArrowRight: 'right', ArrowDown: 'down', ArrowUp: 'cw',
+    KeyA: 'left', KeyD: 'right', KeyS: 'down', KeyW: 'cw', KeyX: 'cw', KeyZ: 'ccw',
+    Space: 'drop', KeyC: 'hold', ShiftLeft: 'hold', ShiftRight: 'hold', KeyP: 'pause', Escape: 'pause', KeyM: 'music',
+  };
+  function bindKeyboard() {
+    window.addEventListener('keydown', e => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const onButton = e.target instanceof Element && e.target.closest('button');
+      if (e.code === 'Enter' || e.code === 'NumpadEnter') {
+        if (!onButton && mode !== 'play') { e.preventDefault(); mainAction(); }
+        return;
+      }
+      const a = KEYMAP[e.code];
+      if (!a || (onButton && e.code === 'Space')) return;
+      e.preventDefault();
+      if (!e.repeat) press(a);
+    });
+    window.addEventListener('keyup', e => { const a = KEYMAP[e.code]; if (a) release(a); });
+  }
+
+  function bindPad() {
+    el.pad.querySelectorAll('[data-act]').forEach(btn => {
+      const act = btn.dataset.act;
+      let active = false;
+      const up = () => { if (!active) return; active = false; btn.classList.remove('is-down'); release(act); };
+      btn.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        try { btn.setPointerCapture(e.pointerId); } catch (err) { /* older browsers */ }
+        active = true;
+        btn.classList.add('is-down');
+        press(act);
+      });
+      btn.addEventListener('pointerup', up);
+      btn.addEventListener('pointercancel', up);
+      btn.addEventListener('lostpointercapture', up);
+      btn.addEventListener('contextmenu', e => e.preventDefault());
+      // Activated from a keyboard or a screen reader: no pointer, so act once.
+      btn.addEventListener('click', e => { if (e.detail === 0) { press(act); release(act); } });
+    });
+  }
+
+  // Finger on the well: tap turns, dragging sideways shifts, dragging down speeds up, a quick flick drops.
+  function bindGestures() {
+    const g = { id: null, x0: 0, y0: 0, ax: 0, ay: 0, t0: 0, moved: false };
+    const step = () => Math.max(18, cellCss * 0.9);
+    el.field.addEventListener('pointerdown', e => {
+      if (e.pointerType === 'mouse' || mode !== 'play' || g.id !== null) return;
+      e.preventDefault();
+      try { el.field.setPointerCapture(e.pointerId); } catch (err) { /* older browsers */ }
+      g.id = e.pointerId; g.x0 = g.ax = e.clientX; g.y0 = g.ay = e.clientY;
+      g.t0 = performance.now(); g.moved = false;
+    });
+    el.field.addEventListener('pointermove', e => {
+      if (e.pointerId !== g.id) return;
+      const s = step();
+      let dx = e.clientX - g.ax, dy = e.clientY - g.ay;
+      if (Math.abs(dx) >= s && Math.abs(dx) > Math.abs(dy)) {
+        while (Math.abs(dx) >= s) {
+          const d = Math.sign(dx);
+          if (canAct() && tryMove(d, 0)) sfx('move');
+          g.ax += d * s; dx -= d * s;
+        }
+        g.ay = e.clientY; g.moved = true;
+      } else if (dy >= s && dy > Math.abs(dx)) {
+        while (dy >= s) {
+          if (canAct() && tryMove(0, 1)) { addScore(1); dropAcc = 0; sfx('soft'); }
+          g.ay += s; dy -= s;
+        }
+        g.ax = e.clientX; g.moved = true;
+      }
+    });
+    const end = e => {
+      if (e.pointerId !== g.id) return;
+      g.id = null;
+      if (e.type !== 'pointerup') return;
+      const ms = performance.now() - g.t0, tx = e.clientX - g.x0, ty = e.clientY - g.y0;
+      if (!g.moved && ms < 300 && Math.hypot(tx, ty) < 12) press('cw');
+      else if (ms < 260 && ty > step() * 3 && ty > Math.abs(tx) * 2) press('drop');
+    };
+    el.field.addEventListener('pointerup', end);
+    el.field.addEventListener('pointercancel', end);
+    el.field.addEventListener('contextmenu', e => e.preventDefault());
+  }
+
+  /* ---------- Carry a game across a page update ---------- */
+  function snapshot() {
+    if (mode === 'idle') return {};
+    if (clearing) finishClear();
+    return { tetris: { v: 1, board, piece, queue, holdType, canHold, score, lines, level, mode: mode === 'over' ? 'over' : 'pause' } };
+  }
+  function restore(d) {
+    try {
+      if (!d || d.v !== 1 || (d.mode !== 'pause' && d.mode !== 'over')) return;
+      if (!Array.isArray(d.board) || d.board.length !== TOTAL) return;
+      if (!d.board.every(r => Array.isArray(r) && r.length === COLS)) return;
+      board = d.board.map(r => r.map(v => (v ? 1 : 0)));
+      queue = (Array.isArray(d.queue) ? d.queue : []).filter(t => TYPES.includes(t));
+      refill();
+      holdType = TYPES.includes(d.holdType) ? d.holdType : null;
+      canHold = d.canHold !== false;
+      score = Math.max(0, Math.floor(+d.score || 0));
+      lines = Math.max(0, Math.floor(+d.lines || 0));
+      level = Math.max(1, Math.floor(+d.level || 1));
+      if (score > best) best = score;
+      const p = d.piece;
+      piece = p && TYPES.includes(p.type) && !collides(p.type, p.rot & 3, p.x | 0, p.y | 0)
+        ? { type: p.type, rot: p.rot & 3, x: p.x | 0, y: p.y | 0 } : null;
+      mode = d.mode; clearing = null; newBest = false;
+      if (mode === 'pause' && !piece) nextPiece();
+      if (piece) lowestY = piece.y;
+      dropAcc = 0; lockTimer = 0; lockResets = 0;
+      hudDirty = true;
+      drawSide();
+      syncUi();
+    } catch (e) { /* a damaged snapshot just means a fresh start */ }
+  }
+
+  /* ---------- Start ---------- */
+  // What the screen shows before the first game: a stack with one gap and a piece heading for it.
+  function demo() {
+    board = emptyBoard();
+    const rows = ['........X.', 'X.....XXX.', 'XX..XXXXX.', 'XXX.XXXXXX', 'XXX.XXXXXX'];
+    rows.forEach((s, i) => {
+      const r = TOTAL - rows.length + i;
+      for (let c = 0; c < COLS; c++) if (s[c] === 'X') board[r][c] = 1;
+    });
+    piece = { type: 'I', rot: 1, x: 1, y: 2 };
+    queue = ['T', 'L', 'S', 'O', 'J', 'Z', 'I'];
+    holdType = null;
+  }
+
+  function tick(t) {
+    requestAnimationFrame(tick);
+    const dt = lastT ? Math.min(100, t - lastT) : 0;
+    lastT = t;
+    if (mode === 'play') update(dt);
+    if (hudDirty) { hudDirty = false; updateHud(); }
+    if (dirty) { dirty = false; drawBoard(); }
+  }
+
+  let booted = false;
+  function init() {
+    buildSeg(el.dBest, 6, 'Рекорд'); buildSeg(el.dScore, 6, 'Счёт');
+    buildSeg(el.dLevel, 2, 'Уровень'); buildSeg(el.dLines, 3, 'Линии');
+    try { best = Math.max(0, parseInt(localStorage.getItem(BEST_KEY), 10) || 0); } catch (e) { best = 0; }
+    let wantSound = true;
+    try { wantSound = localStorage.getItem(SOUND_KEY) !== '0'; } catch (e) { /* ignore */ }
+    setSound(wantSound, false);
+    let wantMusic = true;
+    try { wantMusic = localStorage.getItem(MUSIC_KEY) !== '0'; } catch (e) { /* ignore */ }
+    setMusic(wantMusic);
+    demo();
+    layout();
+    syncUi();
+
+    bindKeyboard(); bindPad(); bindGestures();
+    el.vMain.addEventListener('click', mainAction);
+    el.vAlt.addEventListener('click', newGame);
+    el.btnPause.addEventListener('click', e => { togglePause(); if (e.detail) e.currentTarget.blur(); });
+    el.btnSound.addEventListener('click', e => { setSound(!soundOn, true); if (e.detail) e.currentTarget.blur(); });
+    el.btnMusic.addEventListener('click', e => { setMusic(!music.on); if (e.detail) e.currentTarget.blur(); });
+
+    let pending = 0;
+    const relayout = () => { cancelAnimationFrame(pending); pending = requestAnimationFrame(layout); };
+    if (window.ResizeObserver) new ResizeObserver(relayout).observe(el.screen);
+    window.addEventListener('resize', relayout);
+    const retheme = () => { makeSprites(); drawSide(); dirty = true; };
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', retheme);
+    new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class', 'style'] });
+
+    document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+    window.addEventListener('blur', () => {
+      if (!finePointer.matches) return;
+      setTimeout(() => { if (!document.hasFocus()) pause(); }, 150);
+    });
+    requestAnimationFrame(tick);
+  }
+  function start(data) {
+    if (!booted) { booted = true; init(); }
+    if (data && data.tetris) restore(data.tetris);
+  }
+
+  if (typeof window.__tetrisTest === 'function') {
+    window.__tetrisTest({
+      get state() { return { mode, score, lines, level, piece, board, queue, holdType, canHold, nextCount, cellCss, music: { on: music.on, playing: !!music.gain, notes: music.notes, step: music.step, songSteps: SONG_STEPS }, sound: soundOn, sfx: { ...sfxCount } }; },
+      set(fn) {
+        fn({
+          board(b) { board = b; },
+          piece(p) { piece = p; lowestY = p.y; lockTimer = 0; lockResets = 0; dropAcc = 0; },
+          queue(q) { queue = q; },
+        });
+        dirty = true;
+      },
+      tryRotate, hardDrop, snapshot, restore,
+    });
+  }
+
+  const hot = window.claude && window.claude.hot;
+  try { if (hot && hot.snapshot) hot.snapshot(snapshot); } catch (e) { /* not in a viewer */ }
+  if (hot && hot.ready) {
+    hot.ready(start);
+    setTimeout(() => start({}), 1500);
+  } else start((hot && hot.data) || {});
+})();
+</script>
+</body>
+</html>
